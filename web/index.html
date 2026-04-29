@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>asciicam</title>
+<style>
+  :root { color-scheme: dark; }
+  html, body { margin: 0; background: #000; color: #cfc; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+  #controls {
+    display: flex; flex-wrap: wrap; gap: 12px; align-items: center;
+    padding: 10px 14px; background: #111; border-bottom: 1px solid #222;
+  }
+  #controls label { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; }
+  #controls input[type=range] { width: 120px; }
+  #controls button { background: #1f1; color: #000; border: 0; padding: 6px 14px; font-weight: 700; cursor: pointer; }
+  #controls button:disabled { background: #555; color: #aaa; cursor: not-allowed; }
+  #status { font-size: 12px; opacity: 0.7; }
+  #stage { display: flex; justify-content: center; padding: 16px; }
+  canvas#display { background: #000; image-rendering: pixelated; }
+  video, canvas#sample { display: none; }
+</style>
+</head>
+<body>
+  <div id="controls">
+    <button id="start">Start camera</button>
+    <label>Cell <input type="range" id="cell"   min="4"  max="24"  step="1" value="10"></label>
+    <label>Cols <input type="range" id="cols"   min="40" max="240" step="2" value="140"></label>
+    <label>Max  <input type="range" id="maxB"   min="0"  max="255" step="1" value="255"></label>
+    <label>Min  <input type="range" id="minB"   min="0"  max="255" step="1" value="0"></label>
+    <label><input type="checkbox" id="invert"> invert</label>
+    <label><input type="checkbox" id="mirror" checked> mirror</label>
+    <span id="status">idle</span>
+  </div>
+  <div id="stage">
+    <canvas id="display"></canvas>
+  </div>
+  <video    id="video"  autoplay playsinline muted></video>
+  <canvas   id="sample"></canvas>
+
+<script type="module">
+  import init, { frame_to_ascii } from './pkg/asciicam.js';
+
+  const $ = id => document.getElementById(id);
+  const video = $('video');
+  const sample = $('sample');
+  const display = $('display');
+  const sampleCtx = sample.getContext('2d', { willReadFrequently: true });
+  const displayCtx = display.getContext('2d');
+  const status = $('status');
+
+  const cfg = {
+    cell:   +$('cell').value,
+    cols:   +$('cols').value,
+    maxB:   +$('maxB').value,
+    minB:   +$('minB').value,
+    invert: $('invert').checked,
+    mirror: $('mirror').checked,
+  };
+  for (const k of ['cell', 'cols', 'maxB', 'minB']) {
+    $(k).addEventListener('input', e => { cfg[k] = +e.target.value; });
+  }
+  for (const k of ['invert', 'mirror']) {
+    $(k).addEventListener('input', e => { cfg[k] = e.target.checked; });
+  }
+
+  let running = false;
+
+  $('start').addEventListener('click', async () => {
+    $('start').disabled = true;
+    status.textContent = 'loading wasm…';
+    try {
+      await init();
+      status.textContent = 'requesting camera…';
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { width: { ideal: 1280 }, height: { ideal: 720 } },
+        audio: false,
+      });
+      video.srcObject = stream;
+      await video.play();
+      running = true;
+      status.textContent = 'streaming';
+      requestAnimationFrame(loop);
+    } catch (err) {
+      status.textContent = 'error: ' + err.message;
+      $('start').disabled = false;
+    }
+  });
+
+  function loop() {
+    if (!running) return;
+    const vw = video.videoWidth, vh = video.videoHeight;
+    if (vw && vh) {
+      const cols = Math.max(8, cfg.cols);
+      // Square cells in the output, so rows must scale to preserve the camera aspect.
+      const rows = Math.max(8, Math.round(cols * (vh / vw)));
+      if (sample.width !== cols || sample.height !== rows) {
+        sample.width = cols;
+        sample.height = rows;
+      }
+      sampleCtx.save();
+      if (cfg.mirror) {
+        sampleCtx.translate(cols, 0);
+        sampleCtx.scale(-1, 1);
+      }
+      sampleCtx.drawImage(video, 0, 0, cols, rows);
+      sampleCtx.restore();
+      const img = sampleCtx.getImageData(0, 0, cols, rows);
+      const ascii = frame_to_ascii(img.data, cols, rows, cfg.maxB, cfg.minB, cfg.invert);
+      drawAscii(ascii, cols, rows);
+    }
+    requestAnimationFrame(loop);
+  }
+
+  function drawAscii(ascii, cols, rows) {
+    const cell = cfg.cell;
+    const w = cols * cell;
+    const h = rows * cell;
+    if (display.width !== w || display.height !== h) {
+      display.width = w;
+      display.height = h;
+    }
+    displayCtx.fillStyle = '#000';
+    displayCtx.fillRect(0, 0, w, h);
+    displayCtx.fillStyle = '#9fefa1';
+    // Use a font size slightly smaller than the cell so a tall glyph fits inside its square.
+    const fontPx = Math.max(4, Math.floor(cell * 0.95));
+    displayCtx.font = `${fontPx}px ui-monospace, "Menlo", "Consolas", monospace`;
+    displayCtx.textBaseline = 'middle';
+    displayCtx.textAlign = 'center';
+    let y = 0;
+    let lineStart = 0;
+    for (let i = 0; i <= ascii.length; i++) {
+      if (i === ascii.length || ascii.charCodeAt(i) === 10) {
+        const len = i - lineStart;
+        for (let x = 0; x < len; x++) {
+          const code = ascii.charCodeAt(lineStart + x);
+          if (code !== 32) {
+            displayCtx.fillText(
+              String.fromCharCode(code),
+              x * cell + cell / 2,
+              y * cell + cell / 2,
+            );
+          }
+        }
+        y++;
+        lineStart = i + 1;
+      }
+    }
+  }
+</script>
+</body>
+</html>
