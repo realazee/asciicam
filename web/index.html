@@ -64,24 +64,49 @@
   }
 
   let running = false;
+  let devices = [];
+  let deviceIdx = 0;
 
   $('start').addEventListener('click', async () => {
+    if (running && devices.length > 1) {
+      deviceIdx = (deviceIdx + 1) % devices.length;
+    }
+
     $('start').disabled = true;
     status.textContent = 'loading wasm…';
     try {
-      await init();
+      if (!running) await init();
       status.textContent = 'requesting camera…';
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { width: { ideal: 1280 }, height: { ideal: 720 } },
-        audio: false,
-      });
+      if (video.srcObject) video.srcObject.getTracks().forEach(t => t.stop());
+      
+      let videoOpts = { width: { ideal: 1280 }, height: { ideal: 720 } };
+      if (devices.length > 0 && devices[deviceIdx].deviceId) {
+        videoOpts.deviceId = { exact: devices[deviceIdx].deviceId };
+      } else {
+        videoOpts.facingMode = "user";
+      }
+
+      const stream = await navigator.mediaDevices.getUserMedia({ video: videoOpts, audio: false });
       video.srcObject = stream;
       await video.play();
-      running = true;
+
+      if (!devices.length || (devices.length > 0 && !devices[0].deviceId)) {
+        devices = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === 'videoinput');
+        deviceIdx = Math.max(0, devices.findIndex(d => d.deviceId === stream.getVideoTracks()[0].getSettings().deviceId));
+      }
+
+      if (!running) {
+        running = true;
+        requestAnimationFrame(loop);
+      }
       status.textContent = 'streaming';
-      requestAnimationFrame(loop);
+      
+      if (devices.length > 1) {
+        $('start').textContent = 'Cycle camera';
+        $('start').disabled = false;
+      }
     } catch (err) {
-      status.textContent = 'error: ' + err.message;
+      status.textContent = 'error: ' + (err.message || err.name || 'Could not start video source');
       $('start').disabled = false;
     }
   });
