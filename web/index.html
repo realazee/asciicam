@@ -27,6 +27,8 @@
     <label>Cols <input type="range" id="cols"   min="40" max="240" step="2" value="140"></label>
     <label>Max  <input type="range" id="maxB"   min="0"  max="255" step="1" value="255"></label>
     <label>Min  <input type="range" id="minB"   min="0"  max="255" step="1" value="0"></label>
+    <label>Background color <input type="color" id="color-bg" value="#000"></label>
+    <label>Text color <input type="color" id="color-txt" value="#9fefa1"></label>
     <label><input type="checkbox" id="invert"> invert</label>
     <label><input type="checkbox" id="mirror" checked> mirror</label>
     <span id="status">idle</span>
@@ -49,12 +51,14 @@
   const status = $('status');
 
   const cfg = {
-    cell:   +$('cell').value,
-    cols:   +$('cols').value,
-    maxB:   +$('maxB').value,
-    minB:   +$('minB').value,
-    invert: $('invert').checked,
-    mirror: $('mirror').checked,
+    cell:     +$('cell').value,
+    cols:     +$('cols').value,
+    maxB:     +$('maxB').value,
+    minB:     +$('minB').value,
+    colorBg:  +$('color-bg').value,
+    colorTxt: +$('color-txt').value,
+    invert:   $('invert').checked,
+    mirror:   $('mirror').checked,
   };
   for (const k of ['cell', 'cols', 'maxB', 'minB']) {
     $(k).addEventListener('input', e => { cfg[k] = +e.target.value; });
@@ -144,9 +148,9 @@
       display.width = w;
       display.height = h;
     }
-    displayCtx.fillStyle = '#000';
+    displayCtx.fillStyle = colorBg;
     displayCtx.fillRect(0, 0, w, h);
-    displayCtx.fillStyle = '#9fefa1';
+    displayCtx.fillStyle = colorTxt;
     // Use a font size slightly smaller than the cell so a tall glyph fits inside its square.
     const fontPx = Math.max(4, Math.floor(cell * 0.95));
     displayCtx.font = `${fontPx}px ui-monospace, "Menlo", "Consolas", monospace`;
