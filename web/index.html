@@ -55,8 +55,8 @@
     cols:     +$('cols').value,
     maxB:     +$('maxB').value,
     minB:     +$('minB').value,
-    colorBg:  +$('color-bg').value,
-    colorTxt: +$('color-txt').value,
+    colorBg:  $('color-bg').value,
+    colorTxt: $('color-txt').value,
     invert:   $('invert').checked,
     mirror:   $('mirror').checked,
   };
@@ -66,6 +66,8 @@
   for (const k of ['invert', 'mirror']) {
     $(k).addEventListener('input', e => { cfg[k] = e.target.checked; });
   }
+  $('color-bg').addEventListener('input', e => { cfg.colorBg = e.target.value; });
+  $('color-txt').addEventListener('input', e => { cfg.colorTxt = e.target.value; });
 
   let running = false;
   let devices = [];
@@ -148,9 +150,9 @@
       display.width = w;
       display.height = h;
     }
-    displayCtx.fillStyle = colorBg;
+    displayCtx.fillStyle = cfg.colorBg;
     displayCtx.fillRect(0, 0, w, h);
-    displayCtx.fillStyle = colorTxt;
+    displayCtx.fillStyle = cfg.colorTxt;
     // Use a font size slightly smaller than the cell so a tall glyph fits inside its square.
     const fontPx = Math.max(4, Math.floor(cell * 0.95));
     displayCtx.font = `${fontPx}px ui-monospace, "Menlo", "Consolas", monospace`;
